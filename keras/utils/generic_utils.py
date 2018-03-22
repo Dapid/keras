@@ -232,8 +232,8 @@ def func_load(code, defaults=None, closure=None, globs=None):
 
         try:
             code = dill.loads(raw_code)
-        except dill.UnpicklingError:
-            # We are trying to load legacy
+        except (dill.UnpicklingError, IndexError):
+            # It turns out we are trying to load something saved by marshal
             code = marshal.loads(raw_code)
     except (UnicodeEncodeError, binascii.Error, ValueError):
         # backwards compatibility for models serialized prior to 2.1.2
