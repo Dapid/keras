@@ -15,6 +15,8 @@ import inspect
 import codecs
 import collections
 
+import dill
+
 _GLOBAL_CUSTOM_OBJECTS = {}
 
 
@@ -177,7 +179,7 @@ def func_dump(func):
     # Returns
         A tuple `(code, defaults, closure)`.
     """
-    raw_code = marshal.dumps(func.__code__)
+    raw_code = dill.dumps(func.__code__)
     code = codecs.encode(raw_code, 'base64').decode('ascii')
     defaults = func.__defaults__
     if func.__closure__:
@@ -227,11 +229,22 @@ def func_load(code, defaults=None, closure=None, globs=None):
         closure = tuple(ensure_value_to_cell(_) for _ in closure)
     try:
         raw_code = codecs.decode(code.encode('ascii'), 'base64')
-        code = marshal.loads(raw_code)
+
+        try:
+            code = dill.loads(raw_code)
+        except dill.UnpicklingError:
+            # We are trying to load legacy
+            code = marshal.loads(raw_code)
     except (UnicodeEncodeError, binascii.Error, ValueError):
         # backwards compatibility for models serialized prior to 2.1.2
         raw_code = code.encode('raw_unicode_escape')
         code = marshal.loads(raw_code)
+    except SystemError as e:
+        message = 'The model seems to have been saved with an incompatible version of Python. ' \
+                  'Load the model with the original Python and an updated version of Keras and re-save it. ' \
+                  'The error was: '
+        raise SystemError(message + ' '.join(e.args))
+
     if globs is None:
         globs = globals()
     return python_types.FunctionType(code, globs,
